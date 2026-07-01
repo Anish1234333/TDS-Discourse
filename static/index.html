@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TDS Virtual TA</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen flex items-start justify-center py-12 px-4">
+
+  <div class="w-full max-w-2xl">
+    <div class="mb-6">
+      <h1 class="text-2xl font-semibold text-slate-900">TDS Virtual TA</h1>
+      <p class="text-slate-500 text-sm mt-1">Ask a question from the Tools in Data Science course. Attach a screenshot if it helps.</p>
+    </div>
+
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <label class="block text-sm font-medium text-slate-700 mb-1">Question</label>
+      <textarea id="question" rows="4"
+        class="w-full resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+        placeholder="e.g. Should I use gpt-4o-mini which AI proxy supports, or gpt-3.5-turbo?"></textarea>
+
+      <div class="mt-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1">Attachment (optional)</label>
+        <input id="image" type="file" accept="image/*"
+          class="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+        <p id="fileName" class="text-xs text-slate-400 mt-1"></p>
+      </div>
+
+      <button id="askBtn"
+        class="mt-5 w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <span id="btnLabel">Ask</span>
+      </button>
+    </div>
+
+    <div id="result" class="mt-6 hidden">
+      <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+        <h2 class="text-sm font-medium text-slate-500 mb-2">Answer</h2>
+        <p id="answerText" class="text-slate-900 whitespace-pre-wrap leading-relaxed"></p>
+
+        <div id="linksWrap" class="mt-4 hidden">
+          <h3 class="text-sm font-medium text-slate-500 mb-2">Sources</h3>
+          <ul id="linksList" class="space-y-1"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div id="errorBox" class="mt-6 hidden bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3"></div>
+  </div>
+
+<script>
+  // Same-origin by default. Change this if you host the frontend separately from the API.
+  const API_URL = "/api/";
+
+  const questionEl = document.getElementById("question");
+  const imageEl = document.getElementById("image");
+  const fileNameEl = document.getElementById("fileName");
+  const askBtn = document.getElementById("askBtn");
+  const btnLabel = document.getElementById("btnLabel");
+  const resultEl = document.getElementById("result");
+  const answerText = document.getElementById("answerText");
+  const linksWrap = document.getElementById("linksWrap");
+  const linksList = document.getElementById("linksList");
+  const errorBox = document.getElementById("errorBox");
+
+  imageEl.addEventListener("change", () => {
+    fileNameEl.textContent = imageEl.files[0] ? imageEl.files[0].name : "";
+  });
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]); // strip data: prefix
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function ask() {
+    const question = questionEl.value.trim();
+    errorBox.classList.add("hidden");
+    resultEl.classList.add("hidden");
+
+    if (!question) {
+      errorBox.textContent = "Please enter a question.";
+      errorBox.classList.remove("hidden");
+      return;
+    }
+
+    askBtn.disabled = true;
+    btnLabel.textContent = "Thinking…";
+
+    try {
+      const payload = { question };
+      if (imageEl.files[0]) {
+        payload.image = await fileToBase64(imageEl.files[0]);
+      }
+
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(`Server returned ${res.status}: ${detail}`);
+      }
+
+      const data = await res.json();
+
+      answerText.textContent = data.answer || "No answer returned.";
+      linksList.innerHTML = "";
+      if (data.links && data.links.length) {
+        linksWrap.classList.remove("hidden");
+        data.links.forEach(l => {
+          const li = document.createElement("li");
+          li.innerHTML = `<a href="${l.url}" target="_blank" rel="noopener" class="text-indigo-600 hover:underline text-sm break-all">${l.url}</a>`;
+          linksList.appendChild(li);
+        });
+      } else {
+        linksWrap.classList.add("hidden");
+      }
+
+      resultEl.classList.remove("hidden");
+    } catch (err) {
+      errorBox.textContent = err.message || "Something went wrong.";
+      errorBox.classList.remove("hidden");
+    } finally {
+      askBtn.disabled = false;
+      btnLabel.textContent = "Ask";
+    }
+  }
+
+  askBtn.addEventListener("click", ask);
+  questionEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ask();
+  });
+</script>
+</body>
+</html>

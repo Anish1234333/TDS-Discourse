@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import openai
 
@@ -187,3 +188,6 @@ async def health():
         "embeddings_loaded": bool(embeddings_data.size),
         "num_embeddings": embeddings_data.shape[0] if embeddings_data is not None else 0
     }
+
+# ——— 8) FRONTEND (static files, mounted last so it never shadows /api/, /health, /) ———
+app.mount("/ui", StaticFiles(directory="static", html=True), name="static")
